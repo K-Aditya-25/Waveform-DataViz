@@ -74,6 +74,7 @@ ipython_config.py
 .streamlit/secrets.toml
 
 # VSCode
+.vscode
 .vscode/*
 !.vscode/settings.json
 !.vscode/tasks.json
