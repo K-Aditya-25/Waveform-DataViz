@@ -5,9 +5,11 @@ from plotly.subplots import make_subplots
 import numpy as np
 import pandas as pd
 from pqd_models import PQDModels
+from dynamic_pqd_models import DynamicPQDModels
 import scipy.signal as signal
 from scipy.fft import fft, fftfreq
 import pywt
+import math
 
 # Set page configuration
 st.set_page_config(
@@ -76,30 +78,153 @@ if view_mode == "Individual PQD":
     # Individual PQD visualization
     st.header("Individual PQD Visualization")
     
-    # Signal selection
-    signal_key = st.selectbox(
-        "Select Power Quality Disturbance Type:",
-        list(signals.keys()),
-        format_func=lambda x: f"{x}: {signals[x]['title']}"
-    )
+    # Create a layout with two columns: controls and visualization
+    col1, col2 = st.columns([1, 2])
     
-    # Get selected signal
-    selected_signal = signals[signal_key]
+    with col1:
+        # Signal selection
+        signal_key = st.selectbox(
+            "Select Power Quality Disturbance Type:",
+            list(signals.keys()),
+            format_func=lambda x: f"{x}: {signals[x]['title']}"
+        )
+        
+        # Visualization type selection
+        viz_type = st.radio(
+            "Select Visualization Method:",
+            ["Raw Waveform", "Frequency Spectrum (FFT)", "Wavelet Transform", "Spectrogram"],
+            horizontal=True
+        )
+        
+        # Common parameters
+        st.subheader("Common Parameters")
+        amplitude = st.slider("Amplitude (pu)", min_value=0.1, max_value=2.0, value=1.0, step=0.1)
+        frequency = st.slider("Frequency (Hz)", min_value=10, max_value=100, value=50, step=5)
+        phase = st.slider("Phase (rad)", min_value=0.0, max_value=2*math.pi, value=0.0, step=math.pi/4,
+                          format="%.2f")
+        duration = st.slider("Duration (s)", min_value=0.1, max_value=0.5, value=0.2, step=0.05)
+        
+        # Specific parameters based on PQD type
+        st.subheader(f"Parameters for {signals[signal_key]['title']}")
+        
+        # Initialize parameters dictionary for each PQD type
+        pqd_params = {}
+        
+        if signal_key == "S1":  # Normal signal
+            # No additional parameters
+            pass
+            
+        elif signal_key == "S2":  # Voltage sag
+            sag_depth = st.slider("Sag Depth", min_value=0.1, max_value=0.9, value=0.5, step=0.1)
+            sag_start = st.slider("Sag Start Time (s)", min_value=0.01, max_value=duration-0.05, value=0.05, step=0.01)
+            sag_end = st.slider("Sag End Time (s)", min_value=sag_start+0.02, max_value=duration-0.01, value=min(0.15, duration-0.02), step=0.01)
+            pqd_params = {"depth": sag_depth, "start_time": sag_start, "end_time": sag_end}
+            
+        elif signal_key == "S3":  # Voltage swell
+            swell_mag = st.slider("Swell Magnitude", min_value=0.1, max_value=0.8, value=0.5, step=0.1)
+            swell_start = st.slider("Swell Start Time (s)", min_value=0.01, max_value=duration-0.05, value=0.05, step=0.01)
+            swell_end = st.slider("Swell End Time (s)", min_value=swell_start+0.02, max_value=duration-0.01, value=min(0.15, duration-0.02), step=0.01)
+            pqd_params = {"magnitude": swell_mag, "start_time": swell_start, "end_time": swell_end}
+            
+        elif signal_key == "S4":  # Interruption
+            int_depth = st.slider("Interruption Depth", min_value=0.9, max_value=1.0, value=0.95, step=0.01)
+            int_start = st.slider("Interruption Start Time (s)", min_value=0.01, max_value=duration-0.05, value=0.05, step=0.01)
+            int_end = st.slider("Interruption End Time (s)", min_value=int_start+0.02, max_value=duration-0.01, value=min(0.15, duration-0.02), step=0.01)
+            pqd_params = {"depth": int_depth, "start_time": int_start, "end_time": int_end}
+            
+        elif signal_key == "S5":  # Harmonics
+            h3_amp = st.slider("3rd Harmonic Amplitude", min_value=0.0, max_value=0.5, value=0.2, step=0.05)
+            h5_amp = st.slider("5th Harmonic Amplitude", min_value=0.0, max_value=0.3, value=0.1, step=0.05)
+            h7_amp = st.slider("7th Harmonic Amplitude", min_value=0.0, max_value=0.2, value=0.05, step=0.05)
+            pqd_params = {"h3_amp": h3_amp, "h5_amp": h5_amp, "h7_amp": h7_amp}
+            
+        elif signal_key == "S6":  # Flicker
+            mod_index = st.slider("Modulation Index", min_value=0.05, max_value=0.3, value=0.1, step=0.05)
+            mod_freq = st.slider("Modulation Frequency (Hz)", min_value=5, max_value=25, value=10, step=1)
+            pqd_params = {"mod_index": mod_index, "mod_freq": mod_freq}
+            
+        elif signal_key == "S7":  # Oscillatory transient
+            trans_amp = st.slider("Transient Amplitude", min_value=0.1, max_value=1.0, value=0.8, step=0.1)
+            trans_decay = st.slider("Decay Factor", min_value=1, max_value=20, value=8, step=1)
+            trans_start = st.slider("Transient Start Time (s)", min_value=0.01, max_value=duration-0.05, value=0.05, step=0.01)
+            trans_freq = st.slider("Transient Frequency (Hz)", min_value=100, max_value=1000, value=500, step=50)
+            pqd_params = {"amp": trans_amp, "decay": trans_decay, "start_time": trans_start, "freq": trans_freq}
+            
+        elif signal_key == "S8":  # Spike
+            spike_amp = st.slider("Spike Amplitude", min_value=0.1, max_value=1.0, value=0.5, step=0.1)
+            spike_start = st.slider("Spike Start Time (s)", min_value=0.01, max_value=duration-0.05, value=0.04, step=0.01)
+            spike_end = st.slider("Spike End Time (s)", min_value=spike_start+0.01, max_value=duration-0.01, value=min(0.07, duration-0.02), step=0.01)
+            pqd_params = {"amp": spike_amp, "start_time": spike_start, "end_time": spike_end}
+            
+        elif signal_key == "S9":  # Harmonics with sag
+            hsag_depth = st.slider("Sag Depth", min_value=0.1, max_value=0.9, value=0.3, step=0.1)
+            hsag_start = st.slider("Sag Start Time (s)", min_value=0.01, max_value=duration-0.05, value=0.05, step=0.01)
+            hsag_end = st.slider("Sag End Time (s)", min_value=hsag_start+0.02, max_value=duration-0.01, value=min(0.15, duration-0.02), step=0.01)
+            hsag_h3 = st.slider("3rd Harmonic Amplitude", min_value=0.0, max_value=0.5, value=0.2, step=0.05)
+            hsag_h5 = st.slider("5th Harmonic Amplitude", min_value=0.0, max_value=0.3, value=0.1, step=0.05)
+            pqd_params = {"sag_depth": hsag_depth, "start_time": hsag_start, "end_time": hsag_end, "h3_amp": hsag_h3, "h5_amp": hsag_h5}
+            
+        elif signal_key == "S10":  # Harmonics with swell
+            hswell_mag = st.slider("Swell Magnitude", min_value=0.1, max_value=0.8, value=0.3, step=0.1)
+            hswell_start = st.slider("Swell Start Time (s)", min_value=0.01, max_value=duration-0.05, value=0.05, step=0.01)
+            hswell_end = st.slider("Swell End Time (s)", min_value=hswell_start+0.02, max_value=duration-0.01, value=min(0.15, duration-0.02), step=0.01)
+            hswell_h3 = st.slider("3rd Harmonic Amplitude", min_value=0.0, max_value=0.5, value=0.2, step=0.05)
+            hswell_h5 = st.slider("5th Harmonic Amplitude", min_value=0.0, max_value=0.3, value=0.1, step=0.05)
+            pqd_params = {"swell_mag": hswell_mag, "start_time": hswell_start, "end_time": hswell_end, "h3_amp": hswell_h3, "h5_amp": hswell_h5}
+            
+        elif signal_key == "S11":  # Harmonics with interruption
+            hint_depth = st.slider("Interruption Depth", min_value=0.9, max_value=1.0, value=0.95, step=0.01)
+            hint_start = st.slider("Interruption Start Time (s)", min_value=0.01, max_value=duration-0.05, value=0.05, step=0.01)
+            hint_end = st.slider("Interruption End Time (s)", min_value=hint_start+0.02, max_value=duration-0.01, value=min(0.15, duration-0.02), step=0.01)
+            hint_h3 = st.slider("3rd Harmonic Amplitude", min_value=0.0, max_value=0.5, value=0.2, step=0.05)
+            hint_h5 = st.slider("5th Harmonic Amplitude", min_value=0.0, max_value=0.3, value=0.1, step=0.05)
+            pqd_params = {"int_depth": hint_depth, "start_time": hint_start, "end_time": hint_end, "h3_amp": hint_h3, "h5_amp": hint_h5}
+            
+        elif signal_key == "S12":  # Harmonics with flicker
+            hfli_index = st.slider("Modulation Index", min_value=0.05, max_value=0.3, value=0.1, step=0.05)
+            hfli_freq = st.slider("Modulation Frequency (Hz)", min_value=5, max_value=25, value=10, step=1)
+            hfli_h3 = st.slider("3rd Harmonic Amplitude", min_value=0.0, max_value=0.5, value=0.2, step=0.05)
+            hfli_h5 = st.slider("5th Harmonic Amplitude", min_value=0.0, max_value=0.3, value=0.1, step=0.05)
+            pqd_params = {"mod_index": hfli_index, "mod_freq": hfli_freq, "h3_amp": hfli_h3, "h5_amp": hfli_h5}
     
-    # Show description
-    st.markdown(f"**{selected_signal['title']}**: {selected_signal['description']}")
-    
-    # Visualization type selection
-    viz_type = st.radio(
-        "Select Visualization Method:",
-        ["Raw Waveform", "Frequency Spectrum (FFT)", "Wavelet Transform", "Spectrogram"],
-        horizontal=True
-    )
-    
-    # Get signal data
-    time = selected_signal['time']
-    signal_data = selected_signal['signal']
-    fs = len(time) / (time[-1] - time[0])  # Sampling frequency
+    with col2:
+        # Show description
+        st.markdown(f"**{signals[signal_key]['title']}**: {signals[signal_key]['description']}")
+        
+        dynamic_pqd = DynamicPQDModels(
+            amplitude=amplitude,
+            frequency=frequency,
+            phase=phase,
+            duration=duration
+        )
+        
+        # Generate the signal with dynamic parameters
+        # Map signal keys to method names
+        method_map = {
+            "S1": "normal",
+            "S2": "sag",
+            "S3": "swell",
+            "S4": "interruption",
+            "S5": "harmonics",
+            "S6": "flicker",
+            "S7": "oscillatory_transient",
+            "S8": "spike",
+            "S9": "harmonics_sag",
+            "S10": "harmonics_swell",
+            "S11": "harmonics_interruption",
+            "S12": "harmonics_flicker"
+        }
+        
+        pqd_method = getattr(dynamic_pqd, method_map[signal_key])
+        if pqd_params:
+            dynamic_signal = pqd_method(**pqd_params)
+        else:
+            dynamic_signal = pqd_method()
+        
+        # Get signal data
+        time = dynamic_signal['time']
+        signal_data = dynamic_signal['signal']
+        fs = len(time) / (time[-1] - time[0])  # Sampling frequency
     
     if viz_type == "Raw Waveform":
         # Create interactive plot for raw waveform
@@ -110,13 +235,13 @@ if view_mode == "Individual PQD":
                 x=time,
                 y=signal_data,
                 mode='lines',
-                name=selected_signal['title'],
+                name=dynamic_signal['title'],
                 line=dict(color='royalblue', width=2)
             )
         )
         
         fig.update_layout(
-            title=f"{signal_key}: {selected_signal['title']} - Raw Waveform",
+            title=f"{signal_key}: {dynamic_signal['title']} - Raw Waveform",
             xaxis_title="Time (seconds)",
             yaxis_title="Amplitude (pu)",
             height=500,
@@ -144,7 +269,7 @@ if view_mode == "Individual PQD":
         )
         
         fig.update_layout(
-            title=f"{signal_key}: {selected_signal['title']} - Frequency Spectrum",
+            title=f"{signal_key}: {dynamic_signal['title']} - Frequency Spectrum",
             xaxis_title="Frequency (Hz)",
             yaxis_title="Amplitude",
             height=500,
@@ -169,7 +294,7 @@ if view_mode == "Individual PQD":
         ))
         
         fig.update_layout(
-            title=f"{signal_key}: {selected_signal['title']} - Wavelet Transform",
+            title=f"{signal_key}: {dynamic_signal['title']} - Wavelet Transform",
             xaxis_title="Time (seconds)",
             yaxis_title="Frequency (Hz)",
             height=500,
@@ -194,7 +319,7 @@ if view_mode == "Individual PQD":
         ))
         
         fig.update_layout(
-            title=f"{signal_key}: {selected_signal['title']} - Spectrogram",
+            title=f"{signal_key}: {dynamic_signal['title']} - Spectrogram",
             xaxis_title="Time (seconds)",
             yaxis_title="Frequency (Hz)",
             height=500,
@@ -216,8 +341,8 @@ if view_mode == "Individual PQD":
     
     # Show mathematical model with LaTeX formula
     with st.expander("Show Mathematical Model"):
-        st.markdown(f"### Mathematical Model for {selected_signal['title']}")
-        st.markdown(f"The mathematical representation for **{selected_signal['title']}** is:")
+        st.markdown(f"### Mathematical Model for {dynamic_signal['title']}")
+        st.markdown(f"The mathematical representation for **{dynamic_signal['title']}** is:")
         st.latex(math_models[signal_key])
         st.markdown("""
         Where:
@@ -238,16 +363,24 @@ elif view_mode == "Compare PQDs":
     # Compare PQDs visualization
     st.header("Compare PQDs")
     
-    col1, col2 = st.columns(2)
+    # Create layout with columns for parameters and visualization
+    param_col, viz_col = st.columns([1, 2])
     
-    with col1:
+    with param_col:
+        # Common parameters
+        st.subheader("Common Parameters")
+        amplitude = st.slider("Amplitude (pu)", min_value=0.1, max_value=2.0, value=1.0, step=0.1, key="compare_amplitude")
+        frequency = st.slider("Frequency (Hz)", min_value=10, max_value=100, value=50, step=5, key="compare_frequency")
+        phase = st.slider("Phase (rad)", min_value=0.0, max_value=2*math.pi, value=0.0, step=math.pi/4, format="%.2f", key="compare_phase")
+        duration = st.slider("Duration (s)", min_value=0.1, max_value=0.5, value=0.2, step=0.05, key="compare_duration")
+        
+        # Signal selection
         signal_key1 = st.selectbox(
             "Select First PQD:",
             list(signals.keys()),
             format_func=lambda x: f"{x}: {signals[x]['title']}"
         )
-    
-    with col2:
+        
         signal_key2 = st.selectbox(
             "Select Second PQD:",
             list(signals.keys()),
@@ -255,40 +388,68 @@ elif view_mode == "Compare PQDs":
             index=1
         )
     
-    # Get selected signals
-    selected_signal1 = signals[signal_key1]
-    selected_signal2 = signals[signal_key2]
-    
-    # Create subplot with two rows
-    fig = make_subplots(rows=2, cols=1, 
-                       subplot_titles=[f"{signal_key1}: {selected_signal1['title']}", 
-                                      f"{signal_key2}: {selected_signal2['title']}"],
-                       shared_xaxes=True,
-                       vertical_spacing=0.1)
-    
-    # Add first signal
-    fig.add_trace(
-        go.Scatter(
-            x=selected_signal1['time'],
-            y=selected_signal1['signal'],
-            mode='lines',
-            name=selected_signal1['title'],
-            line=dict(color='royalblue', width=2)
-        ),
-        row=1, col=1
+    # Create dynamic PQD models with selected parameters
+    dynamic_pqd = DynamicPQDModels(
+        amplitude=amplitude,
+        frequency=frequency,
+        phase=phase,
+        duration=duration
     )
     
-    # Add second signal
-    fig.add_trace(
-        go.Scatter(
-            x=selected_signal2['time'],
-            y=selected_signal2['signal'],
-            mode='lines',
-            name=selected_signal2['title'],
-            line=dict(color='firebrick', width=2)
-        ),
-        row=2, col=1
-    )
+    # Map signal keys to method names
+    method_map = {
+        "S1": "normal",
+        "S2": "sag",
+        "S3": "swell",
+        "S4": "interruption",
+        "S5": "harmonics",
+        "S6": "flicker",
+        "S7": "oscillatory_transient",
+        "S8": "spike",
+        "S9": "harmonics_sag",
+        "S10": "harmonics_swell",
+        "S11": "harmonics_interruption",
+        "S12": "harmonics_flicker"
+    }
+    
+    # Generate signals (with default parameters for simplicity in compare mode)
+    pqd_method1 = getattr(dynamic_pqd, method_map[signal_key1])
+    dynamic_signal1 = pqd_method1()
+    
+    pqd_method2 = getattr(dynamic_pqd, method_map[signal_key2])
+    dynamic_signal2 = pqd_method2()
+    
+    with viz_col:
+        # Create subplot with two rows
+        fig = make_subplots(rows=2, cols=1, 
+                        subplot_titles=[f"{signal_key1}: {dynamic_signal1['title']}", 
+                                        f"{signal_key2}: {dynamic_signal2['title']}"],
+                        shared_xaxes=True,
+                        vertical_spacing=0.1)
+        
+        # Add first signal
+        fig.add_trace(
+            go.Scatter(
+                x=dynamic_signal1['time'],
+                y=dynamic_signal1['signal'],
+                mode='lines',
+                name=dynamic_signal1['title'],
+                line=dict(color='royalblue', width=2)
+            ),
+            row=1, col=1
+        )
+        
+        # Add second signal
+        fig.add_trace(
+            go.Scatter(
+                x=dynamic_signal2['time'],
+                y=dynamic_signal2['signal'],
+                mode='lines',
+                name=dynamic_signal2['title'],
+                line=dict(color='firebrick', width=2)
+            ),
+            row=2, col=1
+        )
     
     fig.update_layout(
         title="PQD Comparison",
@@ -304,13 +465,8 @@ elif view_mode == "Compare PQDs":
     st.plotly_chart(fig, use_container_width=True)
     
     # Show descriptions
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.markdown(f"**{selected_signal1['title']}**: {selected_signal1['description']}")
-    
-    with col2:
-        st.markdown(f"**{selected_signal2['title']}**: {selected_signal2['description']}")
+    st.markdown(f"**{dynamic_signal1['title']}**: {dynamic_signal1['description']}")
+    st.markdown(f"**{dynamic_signal2['title']}**: {dynamic_signal2['description']}")
 
 elif view_mode == "FFT":
     # FFT visualization
@@ -386,21 +542,62 @@ else:
     # View All PQDs in a grid
     st.header("All Power Quality Disturbances")
     
+    # Add common parameters for all PQDs
+    col1, col2 = st.columns([1, 2])
+    
+    with col1:
+        # Common parameters
+        st.subheader("Common Parameters for All PQDs")
+        amplitude = st.slider("Amplitude (pu)", min_value=0.1, max_value=2.0, value=1.0, step=0.1, key="all_amplitude")
+        frequency = st.slider("Frequency (Hz)", min_value=10, max_value=100, value=50, step=5, key="all_frequency")
+        phase = st.slider("Phase (rad)", min_value=0.0, max_value=2*math.pi, value=0.0, step=math.pi/4, format="%.2f", key="all_phase")
+        duration = st.slider("Duration (s)", min_value=0.1, max_value=0.5, value=0.2, step=0.05, key="all_duration")
+    
+    # Create dynamic PQD model with selected parameters
+    dynamic_pqd = DynamicPQDModels(
+        amplitude=amplitude,
+        frequency=frequency,
+        phase=phase,
+        duration=duration
+    )
+    
+    # Map signal keys to method names
+    method_map = {
+        "S1": "normal",
+        "S2": "sag",
+        "S3": "swell",
+        "S4": "interruption",
+        "S5": "harmonics",
+        "S6": "flicker",
+        "S7": "oscillatory_transient",
+        "S8": "spike",
+        "S9": "harmonics_sag",
+        "S10": "harmonics_swell",
+        "S11": "harmonics_interruption",
+        "S12": "harmonics_flicker"
+    }
+    
+    # Generate all dynamic signals (with default parameters)
+    dynamic_signals = {}
+    for signal_key in signals.keys():
+        method = getattr(dynamic_pqd, method_map[signal_key])
+        dynamic_signals[signal_key] = method()
+    
     # Determine grid layout
-    n_signals = len(signals)
+    n_signals = len(dynamic_signals)
     n_cols = 3
     n_rows = (n_signals + n_cols - 1) // n_cols
     
     # Create subplot grid
     fig = make_subplots(rows=n_rows, cols=n_cols, 
-                       subplot_titles=[f"{k}: {v['title']}" for k, v in signals.items()],
+                       subplot_titles=[f"{k}: {v['title']}" for k, v in dynamic_signals.items()],
                        shared_xaxes=True,
                        vertical_spacing=0.12,
                        horizontal_spacing=0.05)
     
     # Add each signal to the grid
     i = 0
-    for signal_key, signal_data in signals.items():
+    for signal_key, signal_data in dynamic_signals.items():
         row = i // n_cols + 1
         col = i % n_cols + 1
         
