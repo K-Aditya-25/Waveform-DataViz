@@ -8,6 +8,7 @@ applyTo: "**/*.py"
 - Whenever a Python virtual environment is required, always use [uv](https://github.com/astral-sh/uv) to create and manage the environment.
 - Do not use `venv`, `virtualenv`, or `conda` for creating Python virtual environments.
 - Example command to create a new environment:
+uv init --python 3.13 (unless a different version is specified, use this)
 uv venv .venv
 - Activate the environment using the appropriate method for the user's operating system.
 For MacOS:
