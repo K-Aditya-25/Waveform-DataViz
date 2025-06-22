@@ -52,7 +52,7 @@ math_models = {
     'S4': r"f(t) = A[1 - h(u(t - t_1) - u(t - t_2))]\sin(2\pi f_0 t), 0.9 < h < 1, T < t_2 - t_1 < 9T",
     'S5': r"f(t) = A\sin(2\pi f_0 t) + \sum_{k=2}^{K} A_k\sin(2\pi kf_0 t + \phi_k), 0.05 < A_k < 0.15",
     'S6': r"f(t) = A[1 + \alpha\sin(2\pi f_r t)]\sin(2\pi f_0 t), 0.1 < \alpha < 0.2, 5 < f_r < 25",
-    'S7': r"f(t) = A\sin(2\pi f_0 t) + \alpha[u(t - t_1) - u(t - t_2)]\sin(2\pi f_c(t-t_1))e^{-\frac{t-t_1}{\tau}}, 0.1 < \alpha < 0.8, t_1 < t < 0.05T, 300 < f_c < 900, 0.5T < \tau < 3T",
+    'S7': r"f(t) = A\sin(2\pi f_0 t) + \alpha[u(t - t_1) - u(t - t_2)]\sin(2\pi f_c(t-t_1))e^{-\frac{t-t_1}{\tau}}, 0.1 < \alpha < 0.8, 3 < \tau < 50ms, 300 < f_c< 900, 0.5T < t_2 - t_1 < 3T",
     'S8': r"f(t) = A\sin(2\pi f_0 t) + \alpha\sin(2\pi f_0 t)\sum_{i=0}^{n-1} [h(t-(t_1+0.02i)) - h(t-(t_2+0.02i))], 0.1 < \alpha < 0.4, 0.01T < t_2 - t_1 < 0.05T",
     'S9': r"f(t) = A[1 - h(u(t - t_1) - u(t - t_2))][A\sin(2\pi f_0 t) + \sum_{k=2}^{K} A_k\sin(2\pi kf_0 t + \phi_k)], 0.1 < h < 0.9, t_1 < t_2 < 9T, 0.05 < A_k < 0.15",
     'S10': r"f(t) = A[1 + h(u(t - t_1) - u(t - t_2))][A\sin(2\pi f_0 t) + \sum_{k=2}^{K} A_k\sin(2\pi kf_0 t + \phi_k)], 0.1 < h < 0.8, t_1 < t_2 < 9T, 0.05 < A_k < 0.15",
@@ -102,7 +102,8 @@ if view_mode == "Individual PQD":
         frequency = st.slider("Frequency (Hz)", min_value=10, max_value=100, value=50, step=5)
         phase = st.slider("Phase (rad)", min_value=0.0, max_value=2*math.pi, value=0.0, step=math.pi/4,
                           format="%.2f")
-        duration = st.slider("Duration (s)", min_value=0.1, max_value=0.5, value=0.2, step=0.05)
+        duration = st.slider("Duration (s)", min_value=0.1, max_value=1.0, value=0.2, step=0.05)
+        sample_rate = st.slider("Sampling Frequency (Hz)", min_value=1000, max_value=20000, value=10000, step=1000)
         
         # Specific parameters based on PQD type
         st.subheader(f"Parameters for {signals[signal_key]['title']}")
@@ -195,7 +196,8 @@ if view_mode == "Individual PQD":
             amplitude=amplitude,
             frequency=frequency,
             phase=phase,
-            duration=duration
+            duration=duration,
+            sample_rate=sample_rate
         )
         
         # Generate the signal with dynamic parameters
@@ -224,7 +226,7 @@ if view_mode == "Individual PQD":
         # Get signal data
         time = dynamic_signal['time']
         signal_data = dynamic_signal['signal']
-        fs = len(time) / (time[-1] - time[0])  # Sampling frequency
+        fs = sample_rate  # Use the user-selected sampling frequency
     
     if viz_type == "Raw Waveform":
         # Create interactive plot for raw waveform
@@ -373,6 +375,7 @@ elif view_mode == "Compare PQDs":
         frequency = st.slider("Frequency (Hz)", min_value=10, max_value=100, value=50, step=5, key="compare_frequency")
         phase = st.slider("Phase (rad)", min_value=0.0, max_value=2*math.pi, value=0.0, step=math.pi/4, format="%.2f", key="compare_phase")
         duration = st.slider("Duration (s)", min_value=0.1, max_value=0.5, value=0.2, step=0.05, key="compare_duration")
+        sample_rate = st.slider("Sampling Frequency (Hz)", min_value=1000, max_value=20000, value=10000, step=1000, key="compare_sample_rate")
         
         # Signal selection
         signal_key1 = st.selectbox(
@@ -393,7 +396,8 @@ elif view_mode == "Compare PQDs":
         amplitude=amplitude,
         frequency=frequency,
         phase=phase,
-        duration=duration
+        duration=duration,
+        sample_rate=sample_rate
     )
     
     # Map signal keys to method names
@@ -552,13 +556,15 @@ else:
         frequency = st.slider("Frequency (Hz)", min_value=10, max_value=100, value=50, step=5, key="all_frequency")
         phase = st.slider("Phase (rad)", min_value=0.0, max_value=2*math.pi, value=0.0, step=math.pi/4, format="%.2f", key="all_phase")
         duration = st.slider("Duration (s)", min_value=0.1, max_value=0.5, value=0.2, step=0.05, key="all_duration")
+        sample_rate = st.slider("Sampling Frequency (Hz)", min_value=1000, max_value=20000, value=10000, step=1000, key="all_sample_rate")
     
     # Create dynamic PQD model with selected parameters
     dynamic_pqd = DynamicPQDModels(
         amplitude=amplitude,
         frequency=frequency,
         phase=phase,
-        duration=duration
+        duration=duration,
+        sample_rate=sample_rate
     )
     
     # Map signal keys to method names
@@ -669,4 +675,3 @@ with st.expander("Types of Power Quality Disturbances"):
 # Footer
 st.markdown("---")
 st.markdown("Created with Streamlit and Plotly")
-
