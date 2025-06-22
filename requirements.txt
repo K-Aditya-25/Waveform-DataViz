@@ -3,6 +3,6 @@ streamlit==1.32.2
 plotly==5.18.0
 numpy==1.26.4
 pandas==2.2.1
-scipy
+scipy==1.15.3
 pywavelets==1.5.0
 

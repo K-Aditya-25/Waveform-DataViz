@@ -124,3 +124,6 @@ yarn-error.log*
 # Local cache files
 *.pickle
 *.pkl
+
+
+streamlit_logs.txt
