@@ -4,6 +4,7 @@ __pycache__/
 *$py.class
 *.so
 .Python
+uv.lock
 build/
 develop-eggs/
 dist/
